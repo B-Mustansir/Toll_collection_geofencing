@@ -82,7 +82,7 @@
     function updateDistance(location) {
       if (prevLocation !== null) {
         const distance = location.distanceTo(prevLocation);
-        const deduction = distance * 1.70;
+        const deduction = distance * 0.0173;
         bankAccount -= deduction;
         totalDistance += distance;
 
