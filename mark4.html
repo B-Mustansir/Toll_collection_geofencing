@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Toll Collector</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.0/css/bootstrap.min.css'>
+	<link rel='stylesheet' href='https://unicons.iconscout.com/release/v2.1.9/css/unicons.css'>
+	<link rel="stylesheet" href="./style.css">
+  <style>
+    /* CSS styles for the map container */
+    #map {
+      height: 400px;
+      width: 100%;
+    }
+    p{
+      margin: 2%;
+    }
+    h1{
+      margin: 5%;
+    }
+  </style>
+</head>
+<body>
+  <h1>Toll Collector</h1>
+
+  <div id="map"></div>
+  <p></p>
+  <p id="balance">Current Balance: </p>
+  <p id="distance">Distance Traveled: </p>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6.3.0"></script>
+  <script>
+    // JavaScript code for the map functionality
+    const map = L.map('map');
+    const markers = []; // Declare markers array
+    let polygon = null; // Declare polygon variable
+    let bankAccount = parseFloat(localStorage.getItem('currentBalance')) || 100; // Retrieve or initialize bank account balance from local storage
+    let totalDistance = parseFloat(localStorage.getItem('totalDistance')) || 0; // Retrieve or initialize total distance traveled from local storage
+    let prevLocation = null; // Initialize previous location
+
+    function onMapClick(e) {
+      const latitude = e.latlng.lat;
+      const longitude = e.latlng.lng;
+
+      console.log("Latitude:", latitude);
+      console.log("Longitude:", longitude);
+
+      markers.push(e.latlng);
+      L.marker(e.latlng).addTo(map);
+
+      if (markers.length > 1) {
+        if (polygon !== null) {
+          map.removeLayer(polygon);
+        }
+
+        polygon = L.polygon(markers, { color: 'blue' }).addTo(map);
+      }
+    }
+
+    map.on('click', onMapClick);
+
+    function checkLocationInsidePolygon(location) {
+      if (polygon === null) {
+        return false;
+      }
+
+      const lat = location.coords.latitude;
+      const lng = location.coords.longitude;
+      const point = turf.point([lng, lat]);
+      const polygonGeoJSON = polygon.toGeoJSON();
+
+      return turf.booleanPointInPolygon(point, polygonGeoJSON);
+    }
+
+    function handleLocationError(error) {
+      console.log(`Error: ${error.message}`);
+    }
+
+    function updateDistance(location) {
+      if (prevLocation !== null) {
+        const distance = location.distanceTo(prevLocation);
+        const deduction = distance * 1.70;
+        bankAccount -= deduction;
+        totalDistance += distance;
+
+        console.log("Distance traveled:", distance.toFixed(2), "meters");
+        console.log("Deduction:", deduction.toFixed(2), "from bank account");
+
+        document.getElementById("balance").textContent = "Current Balance: " + bankAccount.toFixed(2);
+        document.getElementById("distance").textContent = "Distance Traveled: " + totalDistance.toFixed(2) + " meters";
+
+        // Store values in local storage
+        localStorage.setItem('totalDistance', totalDistance.toFixed(2));
+        localStorage.setItem('currentBalance', bankAccount.toFixed(2));
+      }
+
+      prevLocation = location;
+    }
+
+    function initializeMap(position) {
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+
+      const initialLocation = L.latLng(latitude, longitude);
+
+      map.setView(initialLocation, 13);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
+        maxZoom: 18,
+      }).addTo(map);
+
+      map.on('click', onMapClick);
+
+      if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(
+          function (position) {
+            const isInsidePolygon = checkLocationInsidePolygon(position);
+
+            console.log("Is inside polygon:", isInsidePolygon);
+
+            if (isInsidePolygon) {
+              const location = L.latLng(position.coords.latitude, position.coords.longitude);
+              L.marker(location).addTo(map);
+              updateDistance(location);
+            } else {
+              const currentDate = new Date();
+              const currentTime = currentDate.toLocaleString();
+              alert(`Vehicle is outside! Current time: ${currentTime}`);
+            }
+          },
+          handleLocationError
+        );
+      } else {
+        console.log("Geolocation is not supported by this browser.");
+      }
+    }
+
+    function initializeGeolocation() {
+      if (navigator.permissions) {
+        navigator.permissions.query({ name: 'geolocation' }).then(function (result) {
+          if (result.state === 'granted' || result.state === 'prompt') {
+            navigator.geolocation.getCurrentPosition(initializeMap, handleLocationError);
+          } else if (result.state === 'denied') {
+            console.log('Geolocation permission denied.');
+          }
+        });
+      } else if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(initializeMap, handleLocationError);
+      } else {
+        console.log("Geolocation is not supported by this browser.");
+      }
+    }
+
+    initializeGeolocation();
+  </script>
+</body>
+</html>
